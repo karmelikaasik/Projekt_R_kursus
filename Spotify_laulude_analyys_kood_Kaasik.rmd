@@ -1,0 +1,275 @@
+---
+title: "Spotify top 2000 laulude andmestiku analüüs"
+author: Karmeli Kaasik
+output: pdf_document
+date: "2022-10-15"
+---
+
+# Sissejuhatus
+
+```{r,echo=FALSE, message=FALSE}
+library(dplyr)
+library(knitr)
+library(tibble)
+library(reshape2)
+library(ggplot2)
+library(lubridate)
+library(stringr)
+tabel <- read.csv("andmestik.csv")
+```
+
+## Töö eesmärgid
+
+Töö eesmärkideks on tutvustada kasutatavat Spotify laulude paremiku andmestikku ning uurida selles esinevaid seoseid nii laulude kui ka artistide suhtes. Selle jaoks on koostatud neli peamist uurimisküsimust:\
+1. Milliseid artiste on aastate lõikes andmestikus kõige rohkem välja toodud?\
+2. Kas ja milline on seos laulu pikkuse ja meeleolu vahel?\
+3. Millise tempoga lauludega on kõige parem tantsida?\
+4. Millised on populaarsete laulude omadused?\
+
+## Andmestiku kirjeldus
+
+Töös kasutatav andmestik on Spotify laulude paremiku andmestik, originaalis ["Top Hits Spotify from 2000-2019"](https://www.kaggle.com/datasets/paradisejoy/top-hits-spotify-from-20002019). Spotify laulude andmestikus on kokku `r nrow(tabel)` laulu. Andmestikus leidub laule aastast `r min(tabel$year)` kuni aastani `r max(tabel$year)`, mis erinevad andmestiku originaalpealkirjast. Erinevaid artiste on andmestikus `r length(unique(tabel$artist))`. Iga laulu puhul on uuritud `r ncol(tabel)` tunnust: artist, laulu nimi, laulu kestus, laulu eksplitsiitsus (kas laulus esineb sõnu või fraase, mis pole sobilikud kõikidele kuulajatele), väljalaskeaasta, populaarsus, kuivõrd sobilik on laul tantsimiseks (skaalal 0-1, kus 1 on kõige sobivam), laulu energia ehk intensiivsus (skaalal 0-1), helistik, valjusus (skaalal -60-0 db), modaalsus, sõnakus (millisel määral koosneb laul sõnalistest helidest ja kui suur on muusika osakaal, skaalal 0-1, kus suuremad väärtused tähistavad suuremat rääkimise osakaalu), akustilisus (skaalal 0-1, kus 1 on suurim tõenäosus, et laul on akustiline), instrumentaalsus (skaalal 0-1, kus suuremate väärtuste korral on suurem tõenäosus laulu instrumentaalsuseks), kui tõenäoliselt on laul salvestatud *live*'is (skaalal 0-1), meeleolu (skaalal 0-1, kus madalamad väärtused tähistavad kurvemaid ning suuremad väärtuseid rõõmsamaid laule), laulu tempo ning laulu žanr.
+
+# Andmestiku analüüs
+
+Et uurida laulude ja žanrite muutumisi aastate kaupa, pidas autor mõistlikuks jaotada aastad gruppideks: 1998-2001, 2002-2004,2005-2007,2008-2010, 2011-2013, 2014-2016, 2017-2020. Esimene ja viimane grupp on ühe aasta võrra pikemad, kuid seda sellepärast, et aastast 1998 on andmestikus vaid üks ning aastast 2020 kolm laulu.
+
+```{r,echo=FALSE,results='asis',fig.width=5,fig.height=3}
+laule_aastas <- arrange(summarise(group_by(tabel, year), n = n()),n) ## mis aastatast mitu laulu on
+tabel$aastagr <- cut(tabel$year, breaks = c(0,2001,2004,2007,2010,2013,2016,Inf), 
+                     labels = c("1998-2001", "2002-2004","2005-2007","2008-2010", "2011-2013", "2014-2016", "2017-2020")) ## jaotamine aastagruppideks
+aastavahemikes_laulud <- arrange(summarise(group_by(tabel, aastagr), n = n()),n) ##mitu laulu nüüd aastavahemikes
+
+ggplot(aastavahemikes_laulud, aes(y = aastagr, x = n)) + geom_bar(stat = "identity") + 
+  xlab("Laulude arv") + ylab("Aastavahemik") + ggtitle("Laulude arv andmestikus aastavahemike kaupa") ## joonis
+```
+
+\
+Laulud on aastavahemike vahel üsna ühtlaselt jaotunud, nagu on näha ülemiselt jooniselt. Kõigis aastavahemikes on ligikaudu 300 laulu, teistest erineb ainult vahemik 1998-2001, millest on andmestikus 221 laulu.
+
+## Ülevaade artistidest
+
+```{r,echo=FALSE, message=F}
+laul_artist_aasta <- tabel[,c("artist", "song", "aastagr")] ## eraldi tabel ainult artisti, laulu ja aastagrupi jaoks
+
+aastad <- dcast(laul_artist_aasta, artist ~ aastagr) ## eelnev tabel laia vormingusse
+
+aastad$kokku <- rowSums(aastad[,2:8]) ## viimaseks veeruks artisti kõikide laulude kogusumma
+
+kokku_nimed <- (aastad %>% arrange(desc(kokku)) %>% slice(1:5))[1]
+kokku_nr <- (aastad %>% arrange(desc(kokku)) %>% slice(1:5))[9]
+esimene_nimed <- (aastad %>% arrange(desc(`1998-2001`), desc(kokku)) %>% slice(1:5))[1]
+esimene_nr <- (aastad %>% arrange(desc(`1998-2001`),desc(kokku)) %>% slice(1:5))[2]
+teine_nimed <- (aastad %>% arrange(desc(`2002-2004`),desc(kokku)) %>% slice(1:5))[1]
+teine_nr <- (aastad %>% arrange(desc(`2002-2004`),desc(kokku)) %>% slice(1:5))[3]
+kolmas_nimed <- (aastad %>% arrange(desc(`2005-2007`),desc(kokku)) %>% slice(1:5))[1]
+kolmas_nr <- (aastad %>% arrange(desc(`2005-2007`),desc(kokku)) %>% slice(1:5))[4]
+neljas_nimed <- (aastad %>% arrange(desc(`2008-2010`), desc(kokku)) %>% slice(1:5))[1]
+neljas_nr <- (aastad %>% arrange(desc(`2008-2010`),desc(kokku)) %>% slice(1:5))[5]
+viies_nimed <- (aastad %>% arrange(desc(`2011-2013`), desc(kokku)) %>% slice(1:5))[1]
+viies_nr <- (aastad %>% arrange(desc(`2011-2013`),desc(kokku)) %>% slice(1:5))[6]
+kuues_nimed <- (aastad %>% arrange(desc(`2014-2016`),desc(kokku)) %>% slice(1:5))[1]
+kuues_nr <- (aastad %>% arrange(desc(`2014-2016`),desc(kokku)) %>% slice(1:5))[7]
+seitsmes_nimed <- (aastad %>% arrange(desc(`2017-2020`),desc(kokku)) %>% slice(1:5))[1]
+seitsmes_nr <- (aastad %>% arrange(desc(`2017-2020`),desc(kokku)) %>% slice(1:5))[8]
+## üleval on tehtud iga aastagrupi kohta väljavõte viiest kõige enamate lauludega andmestikku pääsenud artistidest
+## tahtsin selle kohta funktsiooni ka teha, kuid ei saanud seda tööle
+
+kõik_nimed <- c(esimene_nimed,teine_nimed,kolmas_nimed,neljas_nimed,viies_nimed,kuues_nimed,seitsmes_nimed, kokku_nimed) ## artisitide nimede vektor
+kõik_nr <- c(esimene_nr,teine_nr,kolmas_nr,neljas_nr,viies_nr,kuues_nr,seitsmes_nr, kokku_nr) ## artistide laulude arvude vektor
+top_artistid <- aastad[1:5,2:9] ## lõpptabeli n-ö alus
+veerg = 1
+for (osa in c(1:8)) {
+  ## lisame lõpptabelisse veerud, mis kirjeldavad laulude arvu
+  top_artistid <- add_column(top_artistid, mitu=0, .after= veerg)
+  veerg <- veerg +2
+}
+
+indeks = 1
+for (i in c(1:8)) {
+  ## lisame lõpptabelisee artistid
+  top_artistid[,indeks] <- kõik_nimed[i]
+  indeks<-indeks +2
+}
+
+indeks = 2
+for (i in c(1:8)) {
+  ## lisame lõpptabelisse artistide laulude arvud
+  top_artistid[,indeks] <- kõik_nr[i]
+  indeks<-indeks +2
+}
+```
+
+Andmestikus oli `r length(unique(tabel$artist))` artisti, kellest `r sum(aastad$kokku>1)` artisti on tabelis rohkem kui ühe lauluga. Et uurida artistide muutumist aastate lõikes, loodi tabel, mis kujutab endas aastavahemikke, nendel aastatel kõige enamate lauludega tabelisse sattunud artiste ning mitme lauluga nad antud vahemikus andmestikku jõudsid (vt allolev tabel). Eespool on artistid, kelle poolt oli tabelis selles aastavahemikus rohkem laule, nende võrdsuse korral artistid, kelle teoseid oli andmestikus kokku rohkem. Tabelis on välja toodud iga aastavahemiku kohta viis kõige populaarsemat artisti.\
+
+```{r,echo=FALSE,results='asis'}
+kable(top_artistid[,1:8], digits = c(1, 2), align = c("lccr"), format = "latex") ## esimene pool tabelist
+kable(top_artistid[,9:16], digits = c(1, 2), align = c("lccr"), format = "latex") ## tabeli teine pool
+```
+
+\
+Nagu tabelist on näha, siis igal aastavahemikul on populaarseimad artistid olnud üsna erinevad. Eranditeks on Chris Brown, kes on olnud populaarne nii aastatel 2005-2007 kui ka 2011-2013, David Guetta (aastatel 2008-2010 ning 2011-2013) ja Calvin Harris (2011-2013 ja 2014-2016). Üks huvitavamaid väljavõtteid tabelist on Rihanna 14 populaarset laulu aastatel 2008-2010, mida on tunduvalt rohkem kui kellelgi teisel kõikide aastagruppide peale.
+
+## Laulude pikkused ning meeleolud
+
+```{r,echo=FALSE,message=FALSE, results='hide'}
+tabel$pikkus_sek <- seconds_to_period(tabel$duration_ms/1000)
+
+keskmine_laulupikkus <- summarise(group_by(tabel, aastagr), 
+    keskmine = seconds_to_period(mean(duration_ms)/1000)) ## keskmine laulupikkus aastagruppide kohta
+keskmine_laulupikkus[1,2]
+keskmine_laulupikkus[7,2]## ei osanud neid kuidagi tekstiliseks teha, et teksti sees kasutada
+tabel[tabel$duration_ms == max(tabel$duration_ms),c(1,2,ncol(tabel))] ##pikim laul tabelis, seda ja järgmist oli mugavam vormistada sõnaliselt
+tabel[tabel$duration_ms == min(tabel$duration_ms),c(1,2,ncol(tabel))] ##lühim laul
+```
+
+Andmestikus esinevate laulude keskmine pikkus on `r as.character(seconds_to_period(mean(tabel$duration_ms)/1000))`. Aastate jooksul on keskmine laulupikkus märgatavalt lühenenud, olles aastatel 1998-2001 4M 6.7S ja aastatel 2017-2020 3M 26.9S. Kõige pikem laul andmestikus oli Justin Timberlake'i "Mirrors", mille pikkuseks oli 8M 4.1S. Lühima laulu pikkus oli 1M 53S, selleks oli Lil Nas X-i "Old Town Road".
+
+```{r,echo=FALSE,message=FALSE, results='hide'}
+tabel[tabel$valence == max(tabel$valence),1:2] ## positiivseimad laulud
+tabel[tabel$valence == min(tabel$valence),1:2] ## negatiivseimad laulud
+```
+
+Andmestiku veerg "valence" kirjeldab laulu meeleolu, kus madalamad väärtused tähendavad kurva, vihase vms negatiivne meeleoluga laule ja kõrgemad väärtused märgivad rõõmsamaid ja positiivseid laule. Kõrgeimate meeleolu väärtustega oli andmestikus kaks laulu: Vengaboys-i "Shalala Lala" ning Juanes-i "La Camisa Negra". Kõige negatiivsema meeleoluga oli Martin Garrix-i "Animals", mida ei saa otseselt pidada kurvaks lauluks, kuid kuna negatiivse meeleolu alla lähevad ka vihased laulud, siis on arusaadav selle laulu nii madal hinnang.
+
+Uurimaks, kas laulu pikkuse ning meeleolu vahel on mingi seos, püstitati hüpotees, et negatiivsema meeleoluga laulud on pikemad kui positiivsed laulud. Selle väljaselgitamiseks kasutati Spearmani korrelatsioonikordajat, mille väärtuseks tuli `r cor(tabel$duration_ms,tabel$valence, method="spearman")`. Seda saab tõlgendada kui peaaegu olematut negatiivset suhet, seega vähemalt nende andmete pealt ei saa hüpoteesi kinnitada ega ka ümber lükata. Laulu pikkuse ja meeleolu suhet on kujutatud ka järgneval joonisel.
+
+```{r,echo=FALSE,results='asis',fig.width=5,fig.height=4}
+ggplot(tabel, aes(x=valence, y =duration_ms/1000)) + geom_point() +
+  xlab("Laulu meeleolu") + ylab("Laulu pikkus sekundites") + 
+  ggtitle("Seos laulu pikkuse ja meeleolu vahel")
+```
+
+## Laulu tempo ja tantsimisvõimalikkus
+
+Laulu tempo väärtus kirjeldab laulu BPM-i ehk "lööke minutis" või inglise keeles "beats per minute". Andmestiku laulude tempot saab kirjeldada järgneva tabeli abil:
+
+```{r, echo=FALSE}
+summary(tabel$tempo)
+```
+
+Laulu tantsimisvõimalikkus ehk inglise keeles "danceability" on väärtus 0 ja 1 vahel, mis näitab, kui hästi on võimalik selle laulu taustal tantsida. Suuremad väärtused tähendavad paremat tantslikkust ning väiksemad näitavad, et selle lauluga pole hea tantsida. Andmestiku laulude keskmine on `r mean(tabel$danceability)`, mis näitab, et keskmiselt on nende lauludega hea tantsida. Millise tempoga lauludega on aga kõige parem tantsida? Sellele küsimusele vastamiseks jaotame laulud tantsimisvõimalikkuse alusel nelja gruppi: raske tantsida (väärtused vahemikus 0-0.55), okei tantsida(0.55-0-65), hea tantsida(0.65-0.75) ning väga hea tantsida (väärtused üle 0.75).
+
+```{r, echo=F, results='hide'}
+summary(tabel$danceability) ## teeme tantsimisvõimalikkuse neljaks vastavalt kvartiilidele
+tabel$tantsimine <- cut(tabel$danceability, breaks = c(0,0.55,0.65,0.75,100), 
+                     labels = c("raske tantsida", "okei tantsida", "hea tantsida", "väga hea tantsida"))
+aggregate(tempo~tantsimine, data=tabel, FUN=function(x) c(mean=mean(x), mediaan = median(x), mitu=length(x)))
+```
+
+Uurime iga vahemiku kohta keskmist tempot ja tempo mediaanväärtust. Mõlemad väärtused kahanevad, mida rohkem tantsitavamaks laulud muutuvad. Näiteks on laulude, millega on raske tantsida, keskmine tempo 130, kuid väga hea tantsimisvõimalikkusega lauludes on keskmine tempo 116 BPM. Järgnevas tabelis on näha väga hea tantsimisvõimalikkusega laulude tempo karakteristikud.
+
+```{r, echo=FALSE}
+summary(tabel[tabel$tantsimine == "väga hea tantsida",]$tempo)
+```
+
+Seega laulude, millega on väga hea tatsida, tempo jääb enamikul lauludel vahmeikku 100 BPM kuni 130BPM. Laulu tantsimisvõimalikkuse ja laulu tempo suhet kujutab ka järgnev joonis, millelt on näha, et väga kiire ja väga aeglase tempoga laulud pole tantsimiseks kõige paremad, hea tempo tantsimiseks jääb tempo skaalal umbes teise neljandikku.
+
+```{r,echo=FALSE,results='asis',fig.width=6,fig.height=4}
+ggplot(tabel, aes(x=tempo, y=danceability))+geom_point() + xlab("Laulu tempo")+
+  ylab("Tantsimisvõimalikkuse tase") + ggtitle("Laulu tempo seos tantsimisvõimalikkusega")
+```
+
+## Populaarsete laulude omadused
+
+Kuigi tehniliselt võib kõiki antud andmestikus esinevaid laule pidada populaarseteks, on antud kontekstis mõeldud laule, mille tunnuse "popularity" väärtus on piisavalt suur. Et jaotada laulud populaarsteks ja vähempopulaarseteks, jaotati laulud kolme gruppi: ebapopulaarne (indeks alla 50), keskmise populaarsusega (indeks vahemikus 50-75) ja populaarne, kus populaarsed laulud olid laulud, mille populaarsusindeks oli vähemalt 75. Samuti esines andmestikus 126 laulu, millel populaarsusindeks oli teadmata. Laulude jagunemine populaarsusgruppide vahel on näha järgmises väljatrükis:
+
+```{r, echo=F, message=FALSE}
+
+##ggplot(tabel, aes(x = popularity)) + geom_histogram() ##valimaks sobivad väärtused
+
+
+tabel$popul <- cut(tabel$popularity, breaks = c(0,50,75,100), 
+                     labels = c("ebapopulaarne", "keskmise populaarsusega", "populaarne"))
+
+
+summarise(group_by(tabel, popul), laulude_arv = n(), protsent = laulude_arv/20)
+```
+
+Nagu tabelist näha, on ülekaalus keskmise populaarsusega laulud, kuid ka suure populaarsusega laule esineb palju. Järgnevas uurime laule, mida kategoriseeriti kui "populaarne".
+
+```{r, echo=FALSE, message=F, results='hide'}
+zanrid <- tabel[,1:22]
+
+zanrid$pop <- ifelse(str_detect(as.character(zanrid$genre), "pop"),1,0)
+zanrid$hiphop <- ifelse(str_detect(as.character(zanrid$genre), "hip hop"),1,0)
+zanrid$rock <- ifelse(str_detect(as.character(zanrid$genre), "rock"),1,0)
+zanrid$metal <- ifelse(str_detect(as.character(zanrid$genre), "metal"),1,0)
+zanrid$dance_electronic <- ifelse(str_detect(as.character(zanrid$genre), "Dance/Electronic"),1,0)
+zanrid$latin <- ifelse(str_detect(as.character(zanrid$genre), "latin"),1,0)
+zanrid$country <- ifelse(str_detect(as.character(zanrid$genre), "country"),1,0)
+zanrid$folk_acoustic <- ifelse(str_detect(as.character(zanrid$genre), "Folk/Acoustic"),1,0)
+zanrid$rb <- ifelse(str_detect(as.character(zanrid$genre), "R&B"),1,0)
+
+
+## tegime iga žanri kohta veeru, mille väärtus on 1, kui laul on seda stiili ja 0 kui ei ole
+
+populaarsed <- subset(zanrid, zanrid$popul == 'populaarne' & !(is.na(zanrid$popul))) ##alamandmestik
+
+popular <- merge(populaarsed[,1:21], zanrid[,c(2,22:31)], by="song", all.x=TRUE) ##siin ta võtab mõned väärtused topelt, aga ma ei oska parandada
+summary(populaarsed)
+ ##siin ta võtab mõned väärtused topelt, aga ma ei oska parandada
+summary(popular)
+
+leia_protsent <- function(tab, veeru_nr) {
+  ## leiab protsendi antud tabeli ja tunnuse abil
+  pr <- sum(tab[,veeru_nr])/nrow(tab)
+  return(pr)
+}
+ 
+kokku_protsendid <- c() ## erinevate tunnuste protsentide vektor
+
+for (i in 23:31) {
+  kokku_protsendid <- append(kokku_protsendid,leia_protsent(zanrid,i))
+  ## lisab vastavad protsendid vektorisse
+}
+
+pop_protsendid <- c() ## sama vektor populaarsete laulude tabeli jaoks
+
+for (i in 23:31) {
+  pop_protsendid <- append(pop_protsendid,leia_protsent(popular,i))
+  ## lisab vastavad protsendid vektorisse
+}
+
+## tabel žanrite jaoks
+stiilid <- colnames(zanrid[,23:31]) 
+stiiliprotsendid <- data.frame(stiilid)
+stiiliprotsendid$kogu_protsent <- kokku_protsendid *100
+stiiliprotsendid$populaarsete_protsent <- pop_protsendid*100
+stiiliprotsendid$erinevus <- stiiliprotsendid$kogu_protsent - stiiliprotsendid$populaarsete_protsent ## kahe protsendi vahe
+
+ulejaanud <- subset(tabel, tabel$popul != 'populaarne') ## tabel ülejäänud lauludest (mis ei ole populaarsed)
+```
+
+Selgub, et populaarseid laule on kõikidest žanritest, enim esineb pop ja hip-hop stiilis lugusid. Suurimad erinevused võrreldes terve andmestiku laulude žanritega on suurem rock-laulude ning väiksem popmuusika ning R&B osakaal populaarsete laulude seas. Võrdleme populaarsete laulude ja ülejäänud laulude vahel viit erinevat tunnust, et paremini kirjeldada populaarsete laulude omadusi. Nendeks on laulu tempo, eksplitsiitsus, tantsimisvõimalikkus, meeleolu ning valjusus. Võrdeleme esmalt eksplitsiitsust. Vähempopulaarsete laulude hulgas on selliseid laule `r sum(ulejaanud$explicit == "True")*100/nrow(tabel)` protsenti ning populaarsete laulude hulgas `r sum(popular$explicit == "True")*100/nrow(popular)`%. Seega võib väita, et populaarsetes lauludes on natuke rohkem ebasobivat sisu, kuid see erinevus ei ole väga suur.
+
+```{r, echo = F, message=F, results='hide'}
+summary(ulejaanud$tempo)
+summary(popular$tempo)
+
+summary(ulejaanud$danceability)
+summary(popular$danceability)
+
+```
+
+Võrdleme temposid. Mõlema andmehulga minimaalne, keskmine ja mediaantempo on väga sarnased. Väike erinevus tuleb sisse maksimaalses tempos, mis võib viidata sellele, et populaarsete laulude tempo on pisut aeglasem, kuid oluliselt need teineteisest ei erine. Uurime tunnust "danceability" ehk tantsimisvõimalikkus. Ka selle tunnuse poolest on populaarsed laulude kõikide andmestiku lauludega väga sarnased. Märgatav vahe on ainult mininmaalsetel väärtustel: vähempopulaarsete laulude minimaalne tantsimisvõimalikkuse väärtus on `r min(tabel$danceability)`, mis on peaaegu poole väiksem populaarsete laulude minimaalsest `r min(popular$danceability)`. Sellest võib järeldada, et laulud, mille taustal ei ole üldse võimalik tantsida, ei ole eriti populaarsed. Järgmistel tabelitel on kujutatud laulude valjususe omadusi.
+
+```{r echo=F, message=FALSE}
+
+summary(ulejaanud$loudness)
+
+summary(popular$loudness)
+```
+
+Ülemisel tabelil on näha vähempopulaarsete laulude valjususe kirjeldavaid statistikuid, alumisel populaarsete laulude omi. Kuigi tabeli põhjal paistab, et nii minimaalne kui ka maksimaalne väärtus on populaarstel lauludel väiksem, mis võiks viidata väiksemale hajuvusele, on mõlema tabeli standardhälbed üsnagi võrdsed: populaarsete laulude valjususe standardhälbeks on `r sd(popular$loudness)` ning ülejäänud laulude puhul `r sd(ulejaanud$loudness)`. Seega ka selles tunnuses kahe tabeli vahel olulist erinevust ei ole. Võrdleme lõpuks laulude meeleolusid. Selleks koostame karpdiagrammi.
+
+```{r,echo=FALSE,results='asis',fig.width=5,fig.height=4}
+ggplot(tabel[!(is.na(tabel$popul)),], aes(x=popul, y=valence)) + geom_boxplot() + xlab("Laulu populaarsustase")+
+  ylab("Laulu meeleolu") + ggtitle("Laulu populaarsuse seos laulu meeleoluga") + theme(axis.text.x = element_text(angle = 10))
+```
+
+Jooniselt on näha, et populaarsete laulude meeleolu väärtus on märgatavalt madalam. Seega võib järeldada, et populaarsed laulud on negatiivsema ja kurvema meeleoluga kui vähempopulaarsed laulud. Seega kokkuvõttes saime, et populaarsed laulud ei ole teistest lauludest väga erinevad tempo, valjususe ning tantsimisvõimalikkuse poolest erinevad. Küll aga on populaarsed laulud natuke negatiivsema meeleoluga ning sisaldavad rohkem ebasobivat sisu kui ülejäänud laulud tabelis.
+
+# Kokkuvõte
+
+Kõik uurimisküsimused said vastused. Andmestikus esines mõningaid segadusttekitavaid väärtusi ja tulemusi, mistõttu muudeti teist uurimisküsimust võrreldes esialgsega. Tööst selgus, et andmestikku on sattunud iga aasta erinevaid artiste, kes on välja tulund mitmete populaarsete lauludega. Kõige enam oli andmestikus laule Rihannalt. Tuli välja, et laulu pikkus ja laulu meeleolu vahel olulist seost ei ole. Parim tempo, mille järgi tantsida oli umbes 100 BPM kuni 130 BPM. Kõige populaarsemad laulud teistest lauludest andmestikus eriliselt ei erinenud, nii tempo, valjusus kui ka sobivus tantsimiseks olid sarnased. Natuke erinesid meeleolu, mis oli populaarsetel lauludel negatiivsem ja eksplitsiitsus, mis oli suurem. Kaks populaarseimat žanri olid pop ning hip-hop.
